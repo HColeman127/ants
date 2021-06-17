@@ -1,10 +1,10 @@
-export default class vec2 {
+export default class Vec2 {
     // static fields
-    static readonly zero = new vec2(0, 0);
+    static readonly zero = new Vec2(0, 0);
 
     // instance fields
-    x: number;
-    y: number;
+    readonly x: number;
+    readonly y: number;
 
     constructor(x: number, y: number) {
         this.x = x;
@@ -17,70 +17,79 @@ export default class vec2 {
     // unary operators
 
     is_zero(): boolean {
-        return (this.x == 0 && this.y == 0);
+        return (this.x === 0 && this.y === 0);
     }
 
-    apply(func: (x: number) => number): vec2 {
-        return new vec2(func(this.x), func(this.y));
+    apply(func: (x: number) => number): Vec2 {
+        return new Vec2(func(this.x), func(this.y));
     }
 
-    negative(): vec2 {
-        return new vec2(-this.x, -this.y);
+    negative(): Vec2 {
+        return new Vec2(-this.x, -this.y);
     }
 
-    scale(scalar: number): vec2 {
-        return new vec2(scalar * this.x, scalar * this.y);
+    scale(scalar: number): Vec2 {
+        return new Vec2(scalar * this.x, scalar * this.y);
     }
 
-    trunc(): vec2 {
-        return new vec2(Math.floor(this.x), Math.floor(this.y));
+    trunc(): Vec2 {
+        return new Vec2(this.x << 0, this.y << 0);
     }
     
+    sqr_norm(): number {
+        return this.x**2 + this.y**2;
+    }
+
     norm(): number {
         return Math.sqrt(this.x**2 + this.y**2);
     }
 
-    normalized(): vec2 {
-        const inv_norm = 1 / this.norm()
-        //return new vec2(inv_norm * this.x, inv_norm * this.y);
+    normalized(): Vec2 {
         return this.scale(1 / this.norm());
+    }
+
+    clamp_unit(): Vec2 {
+        const sqr_norm: number = this.x**2 + this.y**2;
+        return (sqr_norm <= 1) ? this : this.scale(1 / Math.sqrt(sqr_norm));
+    }
+
+    clamp_norm(max: number = 1): Vec2 {
+        const sqr_norm: number = this.x**2 + this.y**2;
+        return (sqr_norm <= max**2) ? this : this.scale(max / Math.sqrt(sqr_norm));
+    }
+
+    orth(): Vec2 {
+        return new Vec2(-this.y, this.x);
     }
 
     // binary operators
 
-    plus(v: vec2): vec2 {
-        return new vec2(this.x + v.x, this.y + v.y);
+    plus(v: Vec2): Vec2 {
+        return new Vec2(this.x + v.x, this.y + v.y);
     }
 
-    minus(v: vec2): vec2 {
-        return new vec2(this.x - v.x, this.y - v.y);
+    minus(v: Vec2): Vec2 {
+        return new Vec2(this.x - v.x, this.y - v.y);
     }
 
-    dot(v: vec2): number {
+    dot(v: Vec2): number {
         return (this.x * v.x) + (this.y * v.y);
     }
 
-    dist_to(v: vec2): number {
+    sqr_dist(v: Vec2): number {
+        return (this.x - v.x)**2 + (this.y - v.y)**2;
+    }
+
+    dist(v: Vec2): number {
         return Math.sqrt((this.x - v.x)**2 + (this.y - v.y)**2);
     }
     
 
     // static methods
 
-    static random(scalar: number = 1): vec2 {
-        return new vec2(scalar * (2 * Math.random() - 1), scalar * (2 * Math.random() - 1));
+    static random(scalar: number = 1): Vec2 {
+        return new Vec2(scalar * (2 * Math.random() - 1), scalar * (2 * Math.random() - 1));
     }
-    
-    /*
-    static rotate(vec: vec2, angle: number): {x: number, y:number} {
-        const cos_angle = Math.cos(angle);
-        const sin_angle = Math.sin(angle);
-    
-        return {
-            x: vec.x*cos_angle - vec.y*sin_angle,
-            y: vec.x*sin_angle + vec.y*cos_angle
-        };
-    }*/
 }
 
 
