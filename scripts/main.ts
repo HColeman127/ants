@@ -4,16 +4,13 @@ const enum Params {
     MAP_SIZE = 500,
     MAP_AREA = MAP_SIZE * MAP_SIZE,
     IMAGE_ARRAY_SIZE = MAP_AREA * 4,
-    COLONY_SIZE = 500,
+    COLONY_SIZE = 1000,
     MAX_MARKER = 2**16 - 1,
     MARKER_DECAY = 100,
-}
-
-const enum AntTraits {
-    VIEW_DISTANCE = 20,         // half length of view square
-    SPEED = 1,                  // pixels per frame
+    VIEW_DISTANCE = 20,
+    SPEED = 1,
     MAX_POTENCY = 255,
-    POTENCY_DECAY = 1 / (2**3) 
+    POTENCY_DECAY = 2**(-3)
 }
 
 const enum Brush {
@@ -22,8 +19,6 @@ const enum Brush {
     none
 }
 
-type vectorArray = {x: Int8Array, y: Int8Array};
-
 
 let canvas : HTMLCanvasElement;
 let ctx : CanvasRenderingContext2D;
@@ -31,14 +26,14 @@ let ctx : CanvasRenderingContext2D;
 let is_playing: boolean = false;
 
 
-let stroke_width: number = 40;
+let stroke_width: number = 30;
 let active_brush_wall: Brush = Brush.none;
 let mouse_pos: Vec2;
 
 
 
 
-let ants: Ant[] = [];
+let ants: Ant[];
 let image_data: ImageData;
 
 let marker_A: Uint8ClampedArray;
@@ -47,54 +42,86 @@ let marker_B: Uint8ClampedArray;
 let structures: Uint8ClampedArray;
 
 
-let vec_array_A: vectorArray;
+let p1: HTMLElement;
+let p2: HTMLElement;
+let avg_dt: number = 0;
 
-let avg_fps: number = 0;
-let fps_counter: HTMLElement;
+
+let vision_disc: Vec2[];
+let disc_size: number;
+let disc_dx: Int8Array;
+let disc_dy: Int8Array;
+let disc_di: Uint32Array;
 
 
 window.addEventListener('load', () => {
+    init_html_refs();
+    init_arrays();
+    add_mouse_listeners();
+    add_button_listeners();
+});
+
+function init_html_refs() {
     canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    ctx = canvas.getContext('2d');
+    p1 = document.getElementById('p1');
+    p2 = document.getElementById('p2');
+
     canvas.width = Params.MAP_SIZE;
     canvas.height = Params.MAP_SIZE;
-    
-    ctx = canvas.getContext('2d');
+}
 
-    fps_counter = document.getElementById('fps');
-    
+function init_arrays() {
+    // ants
+    ants = [];
+    for (let i = 0; i < Params.COLONY_SIZE; i++) {
+        ants.push(new Ant(new Vec2(20, 20), Vec2.random()));
+    }
 
+    // markers
     marker_A = new Uint8ClampedArray(Params.MAP_AREA);
     marker_B = new Uint8ClampedArray(Params.MAP_AREA);
 
-    vec_array_A = {
-        x: new Int8Array(Params.MAP_AREA),
-        y: new Int8Array(Params.MAP_AREA)
-    };
-
+    // image data
     image_data = new ImageData(Params.MAP_SIZE, Params.MAP_SIZE);
     for (let i = 3; i < Params.IMAGE_ARRAY_SIZE; i+=4) {
         image_data.data[i] = 255;
     }
 
-
-
-
+    // structures
     structures = new Uint8Array(Params.MAP_AREA);
 
+    
+    // vision disc
+    init_vision_disc();
+}
 
-
-
-    // initialize list of ant objects
-    for (let i = 0; i < Params.COLONY_SIZE; i++) {
-        ants.push(new Ant(new Vec2(20, 20), Vec2.random()));
+function init_vision_disc() {
+    vision_disc = [];
+    const sections = 8;
+    for (let x = -Params.VIEW_DISTANCE; x <= Params.VIEW_DISTANCE; x++) {
+        for (let y = -Params.VIEW_DISTANCE; y <= Params.VIEW_DISTANCE; y++) {
+            if (x**2 + y**2 <= Params.VIEW_DISTANCE**2) vision_disc.push(new Vec2(x, y));
+        }
     }
 
+    vision_disc.sort((a, b) => a.angle2pi() - b.angle2pi());
+    disc_size = vision_disc.length;
 
-    addMouseEvents();
-    addButtonListeners();
-});
+    disc_dx = new Int8Array(vision_disc.length);
+    disc_dy = new Int8Array(vision_disc.length);
+    disc_di = new Uint32Array(vision_disc.length);
 
-function addMouseEvents() {
+    ctx.fillStyle = '#ffffff';
+    for (const i in vision_disc) {
+        const dv = vision_disc[i];
+        disc_dx[i] = dv.x;
+        disc_dy[i] = dv.y;
+        disc_di[i] = dv.x + dv.y * Params.MAP_SIZE;
+    }
+}
+
+function add_mouse_listeners() {
     canvas.oncontextmenu = (event: MouseEvent) => event.preventDefault();
 
     canvas.addEventListener('mousedown', (event: MouseEvent) => {
@@ -103,9 +130,11 @@ function addMouseEvents() {
         switch (event.button) {
             case 0:
                 active_brush_wall = Brush.draw;
+                handle_brush_wall();
                 break;
             case 2:
                 active_brush_wall = Brush.erase;
+                handle_brush_wall();
                 break;
         }
 
@@ -113,14 +142,9 @@ function addMouseEvents() {
     });
 
     window.addEventListener('mousemove', (event: MouseEvent) => {
-        mouse_pos = getMousePosition(event);
+        mouse_pos = get_mouse_position(event);
 
-        /*if (mouse_pos.x < 0 || Params.MAP_SIZE < mouse_pos.x 
-            || mouse_pos.y < 0 
-            || Params.MAP_SIZE < mouse_pos.y)
-            active_brush_wall = Brush.none;
-        */
-        if (active_brush_wall === Brush.draw || active_brush_wall === Brush.erase) handleBrushWall();
+        if (active_brush_wall === Brush.draw || active_brush_wall === Brush.erase) handle_brush_wall();
 
         draw_frame();
     });
@@ -138,7 +162,7 @@ function addMouseEvents() {
     });
 }
 
-function addButtonListeners() {
+function add_button_listeners() {
     const play_button = document.getElementById('play_button') as HTMLButtonElement;
     play_button.addEventListener('click', () => {
         is_playing = true;
@@ -159,16 +183,11 @@ function step() {
 
     draw_frame();
     
-    const dt: number = performance.now() - t0;
-    const fps: number = 1000 / dt;
+    const dt = (performance.now() - t0);
 
-    avg_fps = 0.05*fps + 0.95*avg_fps;
-    //console.log(dt.toFixed(2) + 'ms \@ ' + fps.toFixed(2) + 'fps - avg ' + avg_fps.toFixed(0)); // backticks for format strings
-
-    fps_counter.innerHTML = avg_fps.toFixed(0) + 'fps';
-    
-
-    //console.log(avg_fps.toFixed(2));
+    avg_dt = 0.9*avg_dt + 0.1*dt;
+    p1.innerHTML = avg_dt.toFixed(2) + 'ms';
+    //p2.innerHTML = avg_time.toFixed(2) + 'ms avg';
 
     if (is_playing) {
         window.requestAnimationFrame(step);
@@ -191,26 +210,24 @@ function draw_map(): void {
             image_data.data[j + 2] = 100;
         } else {
             image_data.data[j]     = marker_A[i];
-            image_data.data[j + 1] = marker_B[i];
-            image_data.data[j + 2] = 0;
+            image_data.data[j + 1] = 0;
+            image_data.data[j + 2] = marker_B[i];
         }
     }
     ctx.putImageData(image_data, 0, 0);
 
     ctx.fillStyle = '#ff0000';
     ctx.fillRect(0, 0, 50, 50);
-    ctx.fillStyle = '#00ff00';
+    ctx.fillStyle = '#0000ff';
     ctx.fillRect(Params.MAP_SIZE - 50, Params.MAP_SIZE - 50, 50, 50);
 }
 
 function decay_markers(): void {
     for (let i = 0; i < Params.MAP_AREA; i++) {
-        if (Math.random() < 0.001) {
+        if ((marker_A[i] !== 0 || marker_B[i] !== 0) && Math.random() < 0.005) {
             marker_A[i] = 0;
             marker_B[i] = 0;
         }
-        //marker_A[i] = Math.max(0, marker_A[i] - Params.MARKER_DECAY);
-        //marker_B[i] = Math.max(0, marker_B[i] - Params.MARKER_DECAY);
     }
 }
 
@@ -224,11 +241,12 @@ function draw_ants(): void {
     ctx.fillStyle = '#ffffff';
     for (let i = 0; i < Params.COLONY_SIZE; i++) {
         ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
+        //ants[i].new_look();
     }
 }
 
-function handleBrushWall() {
-    loopCircle(mouse_pos, stroke_width, (x: number, y: number) => {
+function handle_brush_wall() {
+    loop_clamped_circle(mouse_pos, stroke_width, (x: number, y: number) => {
         const index = x + y * Params.MAP_SIZE;
         structures[index] = active_brush_wall;
         marker_A[index] = 0;
@@ -242,8 +260,6 @@ function draw_brush() {
     ctx.arc(mouse_pos.x, mouse_pos.y, stroke_width, 0, 2*Math.PI);
     ctx.stroke();
 }
-
-
 
 class Ant {
     public pos: Vec2;
@@ -260,45 +276,109 @@ class Ant {
     }
 
     update() {
+        //this.update_aim();
+
         this.update_aim();
+
         this.move();
-        this.placeMarker();
-        this.decayPotency();
+        this.drop_marker();
+        this.decay_potency();
     }
 
     private update_aim() {
-        const adjust = this.to_max();
-        if (this.aim.dot(adjust) > 0) this.aim = this.aim.plus(adjust.normalized().scale(0.1));
-        this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        const adjust = this.find_max_in_square();
+        if (this.aim.dot(adjust) > 0) {
+            this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
+        } else {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        }
+         
     }
 
-    private to_max(): Vec2 {
-        //if (Math.random() < 0.1) return Vec2.zero;
-
+    private find_max_in_square(): Vec2 {
         const marker = this.has_food ? marker_A : marker_B;
-        const int_x = trunc(this.pos.x);
-        const int_y = trunc(this.pos.y);
 
-        let max_val = 0;
-        let max_x = int_x;
-        let max_y = int_y;
+        const x0 = trunc(this.pos.x);
+        const y0 = trunc(this.pos.y);
 
-        for (let y = Math.max(0, int_y - AntTraits.VIEW_DISTANCE);
-                 y <  Math.min(Params.MAP_SIZE, int_y + AntTraits.VIEW_DISTANCE);
+        let max_value = 0;
+        let max_x = x0;
+        let max_y = y0;
+
+        for (let y = Math.max(0, y0 - Params.VIEW_DISTANCE);
+                 y <  Math.min(Params.MAP_SIZE, y0 + Params.VIEW_DISTANCE);
                  y++) {
-            for (let x = Math.max(0, int_x - AntTraits.VIEW_DISTANCE);
-                     x < Math.min(Params.MAP_SIZE, int_x + AntTraits.VIEW_DISTANCE);
+            for (let x = Math.max(0, x0 - Params.VIEW_DISTANCE);
+                     x < Math.min(Params.MAP_SIZE, x0 + Params.VIEW_DISTANCE);
                      x++) {
                 const value = marker[x + y * Params.MAP_SIZE];
-                if (value > max_val) {
-                    max_val = value;
+                if (value > max_value) {
+                    max_value = value;
                     max_x = x;
                     max_y = y;
                 }
             }
         }
 
-        return new Vec2(max_x - int_x, max_y - int_y);
+        if (max_value === 0) return Vec2.ZERO;
+
+        return new Vec2(max_x - x0, max_y - y0);
+
+        // if (max_value === 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+
+        // const adjust = new Vec2(max_x - x0, max_y - y0);
+
+        // if (this.aim.dot(adjust) <= 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+
+        // this.aim = this.aim.plus(adjust.normalized()).clamp_unit();
+    }
+
+    private find_max_in_circle(): boolean {
+        const marker = this.has_food ? marker_A : marker_B;
+
+        const x0 = trunc(this.pos.x);
+        const y0 = trunc(this.pos.y);
+
+        let max_value = 0;
+        let max_x = x0;
+        let max_y = y0;
+
+        for (let i = 0; i < disc_size; i++) {
+            const x = x0 + disc_dx[i];
+            const y = y0 + disc_dy[i];
+            
+            if (0 <= x && x < Params.MAP_SIZE) {
+                const value = marker[x + y * Params.MAP_SIZE];
+                if ((value > max_value)) {
+                    max_value = value;
+                    max_x = x;
+                    max_y = y;
+                }
+            }
+        }
+
+
+        //return new Vec2(max_x - x0, max_y - y0);
+
+        if (max_value === 0) {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+            return;
+        }
+
+        const adjust = new Vec2(max_x - x0, max_y - y0);
+
+        if (this.aim.dot(adjust) <= 0) {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+            return;
+        }
+
+        this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
     }
 
     private move() {
@@ -306,12 +386,13 @@ class Ant {
 
         if (new_pos.x < 50 && new_pos.y < 50) {
             this.has_food = false;
-            this.potency = AntTraits.MAX_POTENCY;
+            this.potency = Params.MAX_POTENCY;
             //this.aim = this.aim.scale(-0.5);
         } else if (Params.MAP_SIZE - 50 < new_pos.x && Params.MAP_SIZE - 50 < new_pos.y) {
             this.has_food = true;
-            this.potency = AntTraits.MAX_POTENCY;
-            //this.aim = this.aim.scale(-0.5);
+            this.potency = Params.MAX_POTENCY;
+            this.aim = this.aim.scale(-0.1);
+            new_pos = new_pos.minus(new Vec2(1, 1));
         }
 
         // hit left/right edges
@@ -329,35 +410,37 @@ class Ant {
         // hit wall
         const new_pos_int = new_pos.trunc();
         if (structures[new_pos_int.x + new_pos_int.y * Params.MAP_SIZE] & 1) {
-            this.aim = Vec2.zero;
+            this.aim = Vec2.ZERO;
             //this.pos = new Vec2(20, 20);
+            marker_A[index_of(this.pos)] = 0;
+            marker_B[index_of(this.pos)] = 0;
             return;
         }
 
         this.pos = new_pos.apply(x => clamp(x, 0, Params.MAP_SIZE));
     }
 
-    private placeMarker() {
+    private drop_marker() {
         const marker = this.has_food ? marker_B : marker_A;
         const index = index_of(this.pos);
         //marker[index] = Math.max(marker[index], this.potency ? Params.MAX_MARKER : 0);
         marker[index] = Math.max(marker[index], trunc(this.potency));
     }
 
-    private decayPotency() {
+    private decay_potency() {
         if (this.potency === 0) {
             this.has_food = true;
             return;
         }
 
-        this.potency = Math.max(0, this.potency - AntTraits.POTENCY_DECAY);
+        this.potency = Math.max(0, this.potency - Params.POTENCY_DECAY);
     }
 }
 
 
 
 
-// utils ---------------------------
+// utils ----------------------
 
 function index_of(pos: Vec2): number {
     return trunc(pos.x) + trunc(pos.y) * Params.MAP_SIZE;
@@ -372,15 +455,15 @@ function rand(scale: number = 1): number {
 }
 
 function trunc(val: number): number {
-    return val << 0;
+    return val | 0;
 }
 
-function getMousePosition(event: MouseEvent): Vec2 {
+function get_mouse_position(event: MouseEvent): Vec2 {
     const rect = canvas.getBoundingClientRect();
     return new Vec2(event.clientX - rect.left, event.clientY - rect.top);
 }
 
-function loopRect(pos_bot: Vec2, pos_top: Vec2, func: Function): void {
+function loop_rectangle(pos_bot: Vec2, pos_top: Vec2, func: Function): void {
     for (let y = pos_bot.y; y < pos_top.y; y++) {
         for (let x = pos_bot.x; x < pos_top.x; x++) {
             func(x, y);
@@ -389,7 +472,7 @@ function loopRect(pos_bot: Vec2, pos_top: Vec2, func: Function): void {
 }
 
 function loopSquareClamped(pos: Vec2, inradius: number, func: Function): void {
-    loopRect(
+    loop_rectangle(
         new Vec2(
             Math.max(pos.x - inradius, 0), 
             Math.max(pos.y - inradius, 0)
@@ -402,7 +485,7 @@ function loopSquareClamped(pos: Vec2, inradius: number, func: Function): void {
     );
 }
 
-function loopCircle(pos: Vec2, radius: number, func: Function): void {
+function loop_clamped_circle(pos: Vec2, radius: number, func: Function): void {
     const sqr_radius = radius**2;
     for (let y = Math.max(0, trunc(pos.y) - radius);
              y <  Math.min(Params.MAP_SIZE, trunc(pos.y) + radius);

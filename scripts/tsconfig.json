@@ -4,7 +4,9 @@
         "module": "es6",
         "outDir": "out",
         "noImplicitAny": true,
-        "sourceMap": true
+        "alwaysStrict": true,
+        "sourceMap": true,
+        "watch": true
     },
     "exclude": [
         "node_modules",

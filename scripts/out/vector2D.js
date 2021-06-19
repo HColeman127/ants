@@ -5,6 +5,9 @@ var Vec2 = /** @class */ (function () {
     }
     // instance methods
     // unary operators
+    Vec2.prototype.copy = function () {
+        return new Vec2(this.x, this.y);
+    };
     Vec2.prototype.is_zero = function () {
         return (this.x === 0 && this.y === 0);
     };
@@ -41,6 +44,13 @@ var Vec2 = /** @class */ (function () {
     Vec2.prototype.orth = function () {
         return new Vec2(-this.y, this.x);
     };
+    Vec2.prototype.angle = function () {
+        return Math.atan2(this.y, this.x);
+    };
+    Vec2.prototype.angle2pi = function () {
+        var ang = this.angle();
+        return (ang >= 0 ? ang : 2 * Math.PI + ang);
+    };
     // binary operators
     Vec2.prototype.plus = function (v) {
         return new Vec2(this.x + v.x, this.y + v.y);
@@ -50,6 +60,9 @@ var Vec2 = /** @class */ (function () {
     };
     Vec2.prototype.dot = function (v) {
         return (this.x * v.x) + (this.y * v.y);
+    };
+    Vec2.prototype.cross = function (v) {
+        return (this.x * v.y) - (this.y * v.x);
     };
     Vec2.prototype.sqr_dist = function (v) {
         return Math.pow((this.x - v.x), 2) + Math.pow((this.y - v.y), 2);
@@ -62,8 +75,14 @@ var Vec2 = /** @class */ (function () {
         if (scalar === void 0) { scalar = 1; }
         return new Vec2(scalar * (2 * Math.random() - 1), scalar * (2 * Math.random() - 1));
     };
+    Vec2.polar = function (r, theta) {
+        return new Vec2(r * Math.cos(theta), r * Math.sin(theta));
+    };
     // static fields
-    Vec2.zero = new Vec2(0, 0);
+    Vec2.ZERO = new Vec2(0, 0);
+    Vec2.ONE = new Vec2(1, 1);
+    Vec2.Ex = new Vec2(1, 0);
+    Vec2.Ey = new Vec2(0, 1);
     return Vec2;
 }());
 export default Vec2;

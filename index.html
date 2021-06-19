@@ -1,19 +1,24 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>test</title>
-  </head>
-  
-  <body style="background-color: black;">
-    <canvas id="canvas" width="800px" height="800px" style="border: 1px solid #999999"></canvas>
-    
-    <br>
 
-    <script type="module" src="scripts/out/main.js"></script>
+<head>
+	<meta charset="UTF-8">
+	<link rel="stylesheet" href="styles/style.css">
+	
+	<title>ants</title>
 
-    <button id="play_button">Play</button>
-    <button id="pause_button">Pause</button>
-    <div id="fps" style="color: white;">0.00fps</div>
-  </body>
+	<script type="module" src="scripts/out/main.js" defer></script>
+</head>
+
+<body>
+	<canvas id="canvas" width="800px" height="800px"></canvas>
+
+	<br>
+
+	<button id="play_button">Play</button>
+	<button id="pause_button">Pause</button>
+
+	<p id="p1">0.00ms</p>
+</body>
+
 </html>

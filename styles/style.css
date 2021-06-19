@@ -1,0 +1,13 @@
+body {
+    background-color: black;
+}
+
+canvas {
+    border: 1px solid #999999;
+}
+
+p {
+    color: white;
+    font-family: 'Courier New', Courier, monospace;
+    text-align: right;
+}

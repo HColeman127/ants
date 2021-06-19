@@ -2,64 +2,97 @@ import Vec2 from './vector2D.js';
 var canvas;
 var ctx;
 var is_playing = false;
-var stroke_width = 40;
+var stroke_width = 30;
 var active_brush_wall = 2 /* none */;
 var mouse_pos;
-var ants = [];
+var ants;
 var image_data;
 var marker_A;
 var marker_B;
 var structures;
-var vec_array_A;
-var avg_fps = 0;
-var fps_counter;
+var p1;
+var p2;
+var avg_dt = 0;
+var vision_disc;
+var disc_size;
+var disc_dx;
+var disc_dy;
+var disc_di;
 window.addEventListener('load', function () {
+    init_html_refs();
+    init_arrays();
+    add_mouse_listeners();
+    add_button_listeners();
+});
+function init_html_refs() {
     canvas = document.getElementById('canvas');
+    ctx = canvas.getContext('2d');
+    p1 = document.getElementById('p1');
+    p2 = document.getElementById('p2');
     canvas.width = 500 /* MAP_SIZE */;
     canvas.height = 500 /* MAP_SIZE */;
-    ctx = canvas.getContext('2d');
-    fps_counter = document.getElementById('fps');
+}
+function init_arrays() {
+    // ants
+    ants = [];
+    for (var i = 0; i < 1000 /* COLONY_SIZE */; i++) {
+        ants.push(new Ant(new Vec2(20, 20), Vec2.random()));
+    }
+    // markers
     marker_A = new Uint8ClampedArray(250000 /* MAP_AREA */);
     marker_B = new Uint8ClampedArray(250000 /* MAP_AREA */);
-    vec_array_A = {
-        x: new Int8Array(250000 /* MAP_AREA */),
-        y: new Int8Array(250000 /* MAP_AREA */)
-    };
+    // image data
     image_data = new ImageData(500 /* MAP_SIZE */, 500 /* MAP_SIZE */);
     for (var i = 3; i < 1000000 /* IMAGE_ARRAY_SIZE */; i += 4) {
         image_data.data[i] = 255;
     }
+    // structures
     structures = new Uint8Array(250000 /* MAP_AREA */);
-    // initialize list of ant objects
-    for (var i = 0; i < 500 /* COLONY_SIZE */; i++) {
-        ants.push(new Ant(new Vec2(20, 20), Vec2.random()));
+    // vision disc
+    init_vision_disc();
+}
+function init_vision_disc() {
+    vision_disc = [];
+    var sections = 8;
+    for (var x = -20 /* VIEW_DISTANCE */; x <= 20 /* VIEW_DISTANCE */; x++) {
+        for (var y = -20 /* VIEW_DISTANCE */; y <= 20 /* VIEW_DISTANCE */; y++) {
+            if (Math.pow(x, 2) + Math.pow(y, 2) <= Math.pow(20 /* VIEW_DISTANCE */, 2))
+                vision_disc.push(new Vec2(x, y));
+        }
     }
-    addMouseEvents();
-    addButtonListeners();
-});
-function addMouseEvents() {
+    vision_disc.sort(function (a, b) { return a.angle2pi() - b.angle2pi(); });
+    disc_size = vision_disc.length;
+    disc_dx = new Int8Array(vision_disc.length);
+    disc_dy = new Int8Array(vision_disc.length);
+    disc_di = new Uint32Array(vision_disc.length);
+    ctx.fillStyle = '#ffffff';
+    for (var i in vision_disc) {
+        var dv = vision_disc[i];
+        disc_dx[i] = dv.x;
+        disc_dy[i] = dv.y;
+        disc_di[i] = dv.x + dv.y * 500 /* MAP_SIZE */;
+    }
+}
+function add_mouse_listeners() {
     canvas.oncontextmenu = function (event) { return event.preventDefault(); };
     canvas.addEventListener('mousedown', function (event) {
         //mouse_pos = getMousePosition(event);
         switch (event.button) {
             case 0:
                 active_brush_wall = 1 /* draw */;
+                handle_brush_wall();
                 break;
             case 2:
                 active_brush_wall = 0 /* erase */;
+                handle_brush_wall();
                 break;
         }
         draw_frame();
     });
     window.addEventListener('mousemove', function (event) {
-        mouse_pos = getMousePosition(event);
-        /*if (mouse_pos.x < 0 || Params.MAP_SIZE < mouse_pos.x
-            || mouse_pos.y < 0
-            || Params.MAP_SIZE < mouse_pos.y)
-            active_brush_wall = Brush.none;
-        */
+        mouse_pos = get_mouse_position(event);
         if (active_brush_wall === 1 /* draw */ || active_brush_wall === 0 /* erase */)
-            handleBrushWall();
+            handle_brush_wall();
         draw_frame();
     });
     window.addEventListener('mouseup', function (event) {
@@ -71,7 +104,7 @@ function addMouseEvents() {
         draw_frame();
     });
 }
-function addButtonListeners() {
+function add_button_listeners() {
     var play_button = document.getElementById('play_button');
     play_button.addEventListener('click', function () {
         is_playing = true;
@@ -87,12 +120,10 @@ function step() {
     decay_markers();
     update_ants();
     draw_frame();
-    var dt = performance.now() - t0;
-    var fps = 1000 / dt;
-    avg_fps = 0.05 * fps + 0.95 * avg_fps;
-    //console.log(dt.toFixed(2) + 'ms \@ ' + fps.toFixed(2) + 'fps - avg ' + avg_fps.toFixed(0)); // backticks for format strings
-    fps_counter.innerHTML = avg_fps.toFixed(0) + 'fps';
-    //console.log(avg_fps.toFixed(2));
+    var dt = (performance.now() - t0);
+    avg_dt = 0.9 * avg_dt + 0.1 * dt;
+    p1.innerHTML = avg_dt.toFixed(2) + 'ms';
+    //p2.innerHTML = avg_time.toFixed(2) + 'ms avg';
     if (is_playing) {
         window.requestAnimationFrame(step);
     }
@@ -112,39 +143,38 @@ function draw_map() {
         }
         else {
             image_data.data[j] = marker_A[i];
-            image_data.data[j + 1] = marker_B[i];
-            image_data.data[j + 2] = 0;
+            image_data.data[j + 1] = 0;
+            image_data.data[j + 2] = marker_B[i];
         }
     }
     ctx.putImageData(image_data, 0, 0);
     ctx.fillStyle = '#ff0000';
     ctx.fillRect(0, 0, 50, 50);
-    ctx.fillStyle = '#00ff00';
+    ctx.fillStyle = '#0000ff';
     ctx.fillRect(500 /* MAP_SIZE */ - 50, 500 /* MAP_SIZE */ - 50, 50, 50);
 }
 function decay_markers() {
     for (var i = 0; i < 250000 /* MAP_AREA */; i++) {
-        if (Math.random() < 0.001) {
+        if ((marker_A[i] !== 0 || marker_B[i] !== 0) && Math.random() < 0.005) {
             marker_A[i] = 0;
             marker_B[i] = 0;
         }
-        //marker_A[i] = Math.max(0, marker_A[i] - Params.MARKER_DECAY);
-        //marker_B[i] = Math.max(0, marker_B[i] - Params.MARKER_DECAY);
     }
 }
 function update_ants() {
-    for (var i = 0; i < 500 /* COLONY_SIZE */; i++) {
+    for (var i = 0; i < 1000 /* COLONY_SIZE */; i++) {
         ants[i].update();
     }
 }
 function draw_ants() {
     ctx.fillStyle = '#ffffff';
-    for (var i = 0; i < 500 /* COLONY_SIZE */; i++) {
+    for (var i = 0; i < 1000 /* COLONY_SIZE */; i++) {
         ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
+        //ants[i].new_look();
     }
 }
-function handleBrushWall() {
-    loopCircle(mouse_pos, stroke_width, function (x, y) {
+function handle_brush_wall() {
+    loop_clamped_circle(mouse_pos, stroke_width, function (x, y) {
         var index = x + y * 500 /* MAP_SIZE */;
         structures[index] = active_brush_wall;
         marker_A[index] = 0;
@@ -165,36 +195,82 @@ var Ant = /** @class */ (function () {
         this.aim = aim;
     }
     Ant.prototype.update = function () {
+        //this.update_aim();
         this.update_aim();
         this.move();
-        this.placeMarker();
-        this.decayPotency();
+        this.drop_marker();
+        this.decay_potency();
     };
     Ant.prototype.update_aim = function () {
-        var adjust = this.to_max();
-        if (this.aim.dot(adjust) > 0)
-            this.aim = this.aim.plus(adjust.normalized().scale(0.1));
-        this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        var adjust = this.find_max_in_square();
+        if (this.aim.dot(adjust) > 0) {
+            this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
+        }
+        else {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        }
     };
-    Ant.prototype.to_max = function () {
-        //if (Math.random() < 0.1) return Vec2.zero;
+    Ant.prototype.find_max_in_square = function () {
         var marker = this.has_food ? marker_A : marker_B;
-        var int_x = trunc(this.pos.x);
-        var int_y = trunc(this.pos.y);
-        var max_val = 0;
-        var max_x = int_x;
-        var max_y = int_y;
-        for (var y = Math.max(0, int_y - 20 /* VIEW_DISTANCE */); y < Math.min(500 /* MAP_SIZE */, int_y + 20 /* VIEW_DISTANCE */); y++) {
-            for (var x = Math.max(0, int_x - 20 /* VIEW_DISTANCE */); x < Math.min(500 /* MAP_SIZE */, int_x + 20 /* VIEW_DISTANCE */); x++) {
+        var x0 = trunc(this.pos.x);
+        var y0 = trunc(this.pos.y);
+        var max_value = 0;
+        var max_x = x0;
+        var max_y = y0;
+        for (var y = Math.max(0, y0 - 20 /* VIEW_DISTANCE */); y < Math.min(500 /* MAP_SIZE */, y0 + 20 /* VIEW_DISTANCE */); y++) {
+            for (var x = Math.max(0, x0 - 20 /* VIEW_DISTANCE */); x < Math.min(500 /* MAP_SIZE */, x0 + 20 /* VIEW_DISTANCE */); x++) {
                 var value = marker[x + y * 500 /* MAP_SIZE */];
-                if (value > max_val) {
-                    max_val = value;
+                if (value > max_value) {
+                    max_value = value;
                     max_x = x;
                     max_y = y;
                 }
             }
         }
-        return new Vec2(max_x - int_x, max_y - int_y);
+        if (max_value === 0)
+            return Vec2.ZERO;
+        return new Vec2(max_x - x0, max_y - y0);
+        // if (max_value === 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+        // const adjust = new Vec2(max_x - x0, max_y - y0);
+        // if (this.aim.dot(adjust) <= 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+        // this.aim = this.aim.plus(adjust.normalized()).clamp_unit();
+    };
+    Ant.prototype.find_max_in_circle = function () {
+        var marker = this.has_food ? marker_A : marker_B;
+        var x0 = trunc(this.pos.x);
+        var y0 = trunc(this.pos.y);
+        var max_value = 0;
+        var max_x = x0;
+        var max_y = y0;
+        for (var i = 0; i < disc_size; i++) {
+            var x = x0 + disc_dx[i];
+            var y = y0 + disc_dy[i];
+            if (0 <= x && x < 500 /* MAP_SIZE */) {
+                var value = marker[x + y * 500 /* MAP_SIZE */];
+                if ((value > max_value)) {
+                    max_value = value;
+                    max_x = x;
+                    max_y = y;
+                }
+            }
+        }
+        //return new Vec2(max_x - x0, max_y - y0);
+        if (max_value === 0) {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+            return;
+        }
+        var adjust = new Vec2(max_x - x0, max_y - y0);
+        if (this.aim.dot(adjust) <= 0) {
+            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+            return;
+        }
+        this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
     };
     Ant.prototype.move = function () {
         var new_pos = this.pos.plus(this.aim);
@@ -206,7 +282,8 @@ var Ant = /** @class */ (function () {
         else if (500 /* MAP_SIZE */ - 50 < new_pos.x && 500 /* MAP_SIZE */ - 50 < new_pos.y) {
             this.has_food = true;
             this.potency = 255 /* MAX_POTENCY */;
-            //this.aim = this.aim.scale(-0.5);
+            this.aim = this.aim.scale(-0.1);
+            new_pos = new_pos.minus(new Vec2(1, 1));
         }
         // hit left/right edges
         if (new_pos.x < 0 || 500 /* MAP_SIZE */ < new_pos.x) {
@@ -221,19 +298,21 @@ var Ant = /** @class */ (function () {
         // hit wall
         var new_pos_int = new_pos.trunc();
         if (structures[new_pos_int.x + new_pos_int.y * 500 /* MAP_SIZE */] & 1) {
-            this.aim = Vec2.zero;
+            this.aim = Vec2.ZERO;
             //this.pos = new Vec2(20, 20);
+            marker_A[index_of(this.pos)] = 0;
+            marker_B[index_of(this.pos)] = 0;
             return;
         }
         this.pos = new_pos.apply(function (x) { return clamp(x, 0, 500 /* MAP_SIZE */); });
     };
-    Ant.prototype.placeMarker = function () {
+    Ant.prototype.drop_marker = function () {
         var marker = this.has_food ? marker_B : marker_A;
         var index = index_of(this.pos);
         //marker[index] = Math.max(marker[index], this.potency ? Params.MAX_MARKER : 0);
         marker[index] = Math.max(marker[index], trunc(this.potency));
     };
-    Ant.prototype.decayPotency = function () {
+    Ant.prototype.decay_potency = function () {
         if (this.potency === 0) {
             this.has_food = true;
             return;
@@ -242,7 +321,7 @@ var Ant = /** @class */ (function () {
     };
     return Ant;
 }());
-// utils ---------------------------
+// utils ----------------------
 function index_of(pos) {
     return trunc(pos.x) + trunc(pos.y) * 500 /* MAP_SIZE */;
 }
@@ -254,13 +333,13 @@ function rand(scale) {
     return scale * 2 * (Math.random() - 0.5);
 }
 function trunc(val) {
-    return val << 0;
+    return val | 0;
 }
-function getMousePosition(event) {
+function get_mouse_position(event) {
     var rect = canvas.getBoundingClientRect();
     return new Vec2(event.clientX - rect.left, event.clientY - rect.top);
 }
-function loopRect(pos_bot, pos_top, func) {
+function loop_rectangle(pos_bot, pos_top, func) {
     for (var y = pos_bot.y; y < pos_top.y; y++) {
         for (var x = pos_bot.x; x < pos_top.x; x++) {
             func(x, y);
@@ -268,9 +347,9 @@ function loopRect(pos_bot, pos_top, func) {
     }
 }
 function loopSquareClamped(pos, inradius, func) {
-    loopRect(new Vec2(Math.max(pos.x - inradius, 0), Math.max(pos.y - inradius, 0)), new Vec2(Math.min(pos.x + inradius, 500 /* MAP_SIZE */), Math.min(pos.y + inradius, 500 /* MAP_SIZE */)), func);
+    loop_rectangle(new Vec2(Math.max(pos.x - inradius, 0), Math.max(pos.y - inradius, 0)), new Vec2(Math.min(pos.x + inradius, 500 /* MAP_SIZE */), Math.min(pos.y + inradius, 500 /* MAP_SIZE */)), func);
 }
-function loopCircle(pos, radius, func) {
+function loop_clamped_circle(pos, radius, func) {
     var sqr_radius = Math.pow(radius, 2);
     for (var y = Math.max(0, trunc(pos.y) - radius); y < Math.min(500 /* MAP_SIZE */, trunc(pos.y) + radius); y++) {
         for (var x = Math.max(0, trunc(pos.x) - radius); x < Math.min(500 /* MAP_SIZE */, trunc(pos.x) + radius); x++) {
