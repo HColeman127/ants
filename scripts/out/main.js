@@ -130,6 +130,8 @@ function step() {
 }
 function draw_frame() {
     draw_map();
+    //ctx.fillStyle = '#000000';
+    //ctx.fillRect(0, 0, Params.MAP_SIZE, Params.MAP_SIZE);
     draw_ants();
     draw_brush();
 }
@@ -168,10 +170,16 @@ function update_ants() {
 }
 function draw_ants() {
     ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
     for (var i = 0; i < 1000 /* COLONY_SIZE */; i++) {
-        ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
-        //ants[i].new_look();
+        //ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
+        var p = ants[i].pos;
+        var dp = ants[i].aim.normalized().scale(1.5);
+        ctx.moveTo(p.x - dp.x, p.y - dp.y);
+        ctx.lineTo(p.x + dp.x, p.y + dp.y);
     }
+    ctx.stroke();
 }
 function handle_brush_wall() {
     loop_clamped_circle(mouse_pos, stroke_width, function (x, y) {
@@ -191,8 +199,10 @@ var Ant = /** @class */ (function () {
     function Ant(pos, aim) {
         this.has_food = false;
         this.potency = 0;
+        this.wall_count = 0;
         this.pos = pos;
         this.aim = aim;
+        this.desired_aim = aim;
     }
     Ant.prototype.update = function () {
         //this.update_aim();
@@ -202,21 +212,26 @@ var Ant = /** @class */ (function () {
         this.decay_potency();
     };
     Ant.prototype.update_aim = function () {
-        var adjust = this.find_max_in_square();
-        if (this.aim.dot(adjust) > 0) {
-            this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
-        }
-        else {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-        }
+        //const to_max = this.find_max_in_square();
+        //const to_max = mouse_pos;
+        var max_desire = this.find_max_in_circle().minus(this.pos);
+        this.desired_aim = this.desired_aim.plus(max_desire.dot(this.aim) <= 0 ? Vec2.ZERO : max_desire.normalized().scale(0.1));
+        this.desired_aim = this.desired_aim.nudge(0.1).normalized();
+        var acceleration = this.desired_aim.minus(this.aim).scale(0.5);
+        this.aim = this.aim.plus(acceleration).clamp_unit();
+        // if (this.aim.dot(adjust) > 0) {
+        //     this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
+        // } else {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        // }
     };
     Ant.prototype.find_max_in_square = function () {
         var marker = this.has_food ? marker_A : marker_B;
         var x0 = trunc(this.pos.x);
         var y0 = trunc(this.pos.y);
         var max_value = 0;
-        var max_x = x0;
-        var max_y = y0;
+        var max_x = this.pos.x;
+        var max_y = this.pos.y;
         for (var y = Math.max(0, y0 - 20 /* VIEW_DISTANCE */); y < Math.min(500 /* MAP_SIZE */, y0 + 20 /* VIEW_DISTANCE */); y++) {
             for (var x = Math.max(0, x0 - 20 /* VIEW_DISTANCE */); x < Math.min(500 /* MAP_SIZE */, x0 + 20 /* VIEW_DISTANCE */); x++) {
                 var value = marker[x + y * 500 /* MAP_SIZE */];
@@ -227,9 +242,8 @@ var Ant = /** @class */ (function () {
                 }
             }
         }
-        if (max_value === 0)
-            return Vec2.ZERO;
-        return new Vec2(max_x - x0, max_y - y0);
+        //if (max_x === this.pos.x && max_y === this.pos.y) return Vec2.ZERO;
+        return new Vec2(max_x, max_y);
         // if (max_value === 0) {
         //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
         //     return;
@@ -261,16 +275,17 @@ var Ant = /** @class */ (function () {
             }
         }
         //return new Vec2(max_x - x0, max_y - y0);
-        if (max_value === 0) {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-            return;
-        }
-        var adjust = new Vec2(max_x - x0, max_y - y0);
-        if (this.aim.dot(adjust) <= 0) {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-            return;
-        }
-        this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
+        return new Vec2(max_x, max_y);
+        // if (max_value === 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+        // const adjust = new Vec2(max_x - x0, max_y - y0);
+        // if (this.aim.dot(adjust) <= 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+        // this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
     };
     Ant.prototype.move = function () {
         var new_pos = this.pos.plus(this.aim);
@@ -282,29 +297,34 @@ var Ant = /** @class */ (function () {
         else if (500 /* MAP_SIZE */ - 50 < new_pos.x && 500 /* MAP_SIZE */ - 50 < new_pos.y) {
             this.has_food = true;
             this.potency = 255 /* MAX_POTENCY */;
-            this.aim = this.aim.scale(-0.1);
+            this.desired_aim = this.aim.negative();
             new_pos = new_pos.minus(new Vec2(1, 1));
         }
         // hit left/right edges
         if (new_pos.x < 0 || 500 /* MAP_SIZE */ < new_pos.x) {
-            this.aim = new Vec2(0, this.aim.y);
+            this.desired_aim = new Vec2(-this.aim.x, this.aim.y);
             return;
         }
         // hit top/bottom edges
         if (new_pos.y < 0 || 500 /* MAP_SIZE */ < new_pos.y) {
-            this.aim = new Vec2(this.aim.x, 0);
+            this.desired_aim = new Vec2(this.aim.x, -this.aim.y);
             return;
         }
         // hit wall
         var new_pos_int = new_pos.trunc();
         if (structures[new_pos_int.x + new_pos_int.y * 500 /* MAP_SIZE */] & 1) {
-            this.aim = Vec2.ZERO;
-            //this.pos = new Vec2(20, 20);
-            marker_A[index_of(this.pos)] = 0;
-            marker_B[index_of(this.pos)] = 0;
+            this.desired_aim = Vec2.ZERO;
+            this.pos = this.pos.minus(this.aim);
+            //marker_A[index_of(this.pos)] = 0;
+            //marker_B[index_of(this.pos)] = 0;
+            this.wall_count++;
+            if (this.wall_count > 100) {
+                this.pos = new Vec2(20, 20);
+            }
             return;
         }
         this.pos = new_pos.apply(function (x) { return clamp(x, 0, 500 /* MAP_SIZE */); });
+        this.wall_count = 0;
     };
     Ant.prototype.drop_marker = function () {
         var marker = this.has_food ? marker_B : marker_A;

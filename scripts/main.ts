@@ -196,6 +196,8 @@ function step() {
 
 function draw_frame() {
     draw_map();
+    //ctx.fillStyle = '#000000';
+    //ctx.fillRect(0, 0, Params.MAP_SIZE, Params.MAP_SIZE);
     draw_ants();
     draw_brush();
 }
@@ -239,10 +241,18 @@ function update_ants(): void {
 
 function draw_ants(): void {
     ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
     for (let i = 0; i < Params.COLONY_SIZE; i++) {
-        ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
-        //ants[i].new_look();
+        //ctx.fillRect(ants[i].pos.x - 1, ants[i].pos.y - 1, 2, 2);
+        const p = ants[i].pos;
+        const dp = ants[i].aim.normalized().scale(1.5);
+        
+        ctx.moveTo(p.x - dp.x, p.y - dp.y);
+        ctx.lineTo(p.x + dp.x, p.y + dp.y);
+        
     }
+    ctx.stroke();
 }
 
 function handle_brush_wall() {
@@ -268,11 +278,14 @@ class Ant {
     public has_food: boolean = false;
     public potency: number = 0;
 
-    private move_vec: Vec2;
+    private desired_aim: Vec2;
+
+    private wall_count: number = 0;
 
     constructor(pos: Vec2, aim: Vec2) {
         this.pos = pos;
         this.aim = aim;
+        this.desired_aim = aim;
     }
 
     update() {
@@ -286,12 +299,24 @@ class Ant {
     }
 
     private update_aim() {
-        const adjust = this.find_max_in_square();
-        if (this.aim.dot(adjust) > 0) {
-            this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
-        } else {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-        }
+        //const to_max = this.find_max_in_square();
+        //const to_max = mouse_pos;
+
+        const max_desire = this.find_max_in_circle().minus(this.pos);
+
+        this.desired_aim = this.desired_aim.plus(max_desire.dot(this.aim) <= 0 ? Vec2.ZERO : max_desire.normalized().scale(0.1));
+
+        this.desired_aim = this.desired_aim.nudge(0.1).normalized();
+
+
+        const acceleration = this.desired_aim.minus(this.aim).scale(0.5);
+
+        this.aim = this.aim.plus(acceleration).clamp_unit();
+        // if (this.aim.dot(adjust) > 0) {
+        //     this.aim = this.aim.plus(adjust.normalized().plus(Vec2.random()).scale(0.1)).clamp_unit();
+        // } else {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        // }
          
     }
 
@@ -302,8 +327,8 @@ class Ant {
         const y0 = trunc(this.pos.y);
 
         let max_value = 0;
-        let max_x = x0;
-        let max_y = y0;
+        let max_x = this.pos.x;
+        let max_y = this.pos.y;
 
         for (let y = Math.max(0, y0 - Params.VIEW_DISTANCE);
                  y <  Math.min(Params.MAP_SIZE, y0 + Params.VIEW_DISTANCE);
@@ -320,9 +345,9 @@ class Ant {
             }
         }
 
-        if (max_value === 0) return Vec2.ZERO;
+        //if (max_x === this.pos.x && max_y === this.pos.y) return Vec2.ZERO;
 
-        return new Vec2(max_x - x0, max_y - y0);
+        return new Vec2(max_x, max_y);
 
         // if (max_value === 0) {
         //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
@@ -339,7 +364,7 @@ class Ant {
         // this.aim = this.aim.plus(adjust.normalized()).clamp_unit();
     }
 
-    private find_max_in_circle(): boolean {
+    private find_max_in_circle(): Vec2 {
         const marker = this.has_food ? marker_A : marker_B;
 
         const x0 = trunc(this.pos.x);
@@ -366,19 +391,21 @@ class Ant {
 
         //return new Vec2(max_x - x0, max_y - y0);
 
-        if (max_value === 0) {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-            return;
-        }
+        return new Vec2(max_x, max_y);
 
-        const adjust = new Vec2(max_x - x0, max_y - y0);
+        // if (max_value === 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
 
-        if (this.aim.dot(adjust) <= 0) {
-            this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
-            return;
-        }
+        // const adjust = new Vec2(max_x - x0, max_y - y0);
 
-        this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
+        // if (this.aim.dot(adjust) <= 0) {
+        //     this.aim = this.aim.plus(Vec2.random(0.1)).clamp_unit();
+        //     return;
+        // }
+
+        // this.aim = this.aim.plus((new Vec2(max_x - x0, max_y - y0)).normalized()).clamp_unit();
     }
 
     private move() {
@@ -391,33 +418,38 @@ class Ant {
         } else if (Params.MAP_SIZE - 50 < new_pos.x && Params.MAP_SIZE - 50 < new_pos.y) {
             this.has_food = true;
             this.potency = Params.MAX_POTENCY;
-            this.aim = this.aim.scale(-0.1);
+            this.desired_aim = this.aim.negative();
             new_pos = new_pos.minus(new Vec2(1, 1));
         }
 
         // hit left/right edges
         if (new_pos.x < 0 || Params.MAP_SIZE < new_pos.x) {
-            this.aim = new Vec2(0, this.aim.y);
+            this.desired_aim = new Vec2(-this.aim.x, this.aim.y);
             return;
         }
 
         // hit top/bottom edges
         if (new_pos.y < 0 || Params.MAP_SIZE < new_pos.y) {
-            this.aim = new Vec2(this.aim.x, 0);
+            this.desired_aim = new Vec2(this.aim.x, -this.aim.y);
             return;
         }
 
         // hit wall
         const new_pos_int = new_pos.trunc();
         if (structures[new_pos_int.x + new_pos_int.y * Params.MAP_SIZE] & 1) {
-            this.aim = Vec2.ZERO;
-            //this.pos = new Vec2(20, 20);
-            marker_A[index_of(this.pos)] = 0;
-            marker_B[index_of(this.pos)] = 0;
+            this.desired_aim = Vec2.ZERO;
+            this.pos = this.pos.minus(this.aim);
+            //marker_A[index_of(this.pos)] = 0;
+            //marker_B[index_of(this.pos)] = 0;
+            this.wall_count++;
+            if (this.wall_count > 100) {
+                this.pos = new Vec2(20, 20);
+            }
             return;
         }
 
         this.pos = new_pos.apply(x => clamp(x, 0, Params.MAP_SIZE));
+        this.wall_count = 0;
     }
 
     private drop_marker() {

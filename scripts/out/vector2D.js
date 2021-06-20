@@ -52,11 +52,18 @@ var Vec2 = /** @class */ (function () {
         return (ang >= 0 ? ang : 2 * Math.PI + ang);
     };
     // binary operators
+    Vec2.prototype.equals = function (v) {
+        return (this.x === v.x && this.y === v.y);
+    };
     Vec2.prototype.plus = function (v) {
         return new Vec2(this.x + v.x, this.y + v.y);
     };
     Vec2.prototype.minus = function (v) {
         return new Vec2(this.x - v.x, this.y - v.y);
+    };
+    Vec2.prototype.nudge = function (scalar) {
+        if (scalar === void 0) { scalar = 1; }
+        return this.plus(Vec2.random(scalar));
     };
     Vec2.prototype.dot = function (v) {
         return (this.x * v.x) + (this.y * v.y);
