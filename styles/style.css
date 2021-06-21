@@ -6,8 +6,11 @@ canvas {
     border: 1px solid #999999;
 }
 
+button {
+    float: left;
+}
+
 p {
     color: white;
     font-family: 'Courier New', Courier, monospace;
-    text-align: right;
 }

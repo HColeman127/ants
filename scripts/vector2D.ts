@@ -14,7 +14,29 @@ export default class Vec2 {
         this.y = y;
     }
 
+    // computed properties
+
+    get norm(): number {
+        return Math.sqrt(this.x**2 + this.y**2);
+    }
     
+    get normalized(): Vec2 {
+        return this.scale(1 / this.norm);
+    }
+
+    get angle(): number {
+        return Math.atan2(this.y, this.x);
+    }
+
+    get angle2pi(): number {
+        const ang = this.angle;
+        return (ang >= 0 ? ang : 2*Math.PI + ang);
+    }
+
+    get is_zero(): boolean {
+        return (this.x === 0 && this.y === 0);
+    }
+
     // instance methods
 
     // unary operators
@@ -23,9 +45,7 @@ export default class Vec2 {
         return new Vec2(this.x, this.y);
     }
 
-    is_zero(): boolean {
-        return (this.x === 0 && this.y === 0);
-    }
+    
 
     apply(func: (x: number) => number): Vec2 {
         return new Vec2(func(this.x), func(this.y));
@@ -39,25 +59,16 @@ export default class Vec2 {
         return new Vec2(scalar * this.x, scalar * this.y);
     }
 
+    scale_to(scalar: number): Vec2 {
+        return this.scale(scalar / this.norm);
+    }
+
     trunc(): Vec2 {
         return new Vec2(this.x << 0, this.y << 0);
     }
     
     sqr_norm(): number {
         return this.x**2 + this.y**2;
-    }
-
-    norm(): number {
-        return Math.sqrt(this.x**2 + this.y**2);
-    }
-
-    normalized(): Vec2 {
-        return this.scale(1 / this.norm());
-    }
-
-    clamp_unit(): Vec2 {
-        const sqr_norm: number = this.x**2 + this.y**2;
-        return (sqr_norm <= 1) ? this : this.scale(1 / Math.sqrt(sqr_norm));
     }
 
     clamp_norm(max: number = 1): Vec2 {
@@ -69,13 +80,8 @@ export default class Vec2 {
         return new Vec2(-this.y, this.x);
     }
 
-    angle(): number {
-        return Math.atan2(this.y, this.x);
-    }
-
-    angle2pi(): number {
-        const ang = this.angle();
-        return (ang >= 0 ? ang : 2*Math.PI + ang);
+    nudge(scalar: number = 1): Vec2 {
+        return this.plus(Vec2.random(scalar));
     }
 
     // binary operators
@@ -90,10 +96,6 @@ export default class Vec2 {
 
     minus(v: Vec2): Vec2 {
         return new Vec2(this.x - v.x, this.y - v.y);
-    }
-
-    nudge(scalar: number = 1): Vec2 {
-        return this.plus(Vec2.random(scalar));
     }
 
     dot(v: Vec2): number {
@@ -111,6 +113,7 @@ export default class Vec2 {
     dist(v: Vec2): number {
         return Math.sqrt((this.x - v.x)**2 + (this.y - v.y)**2);
     }
+    
     
 
     // static methods

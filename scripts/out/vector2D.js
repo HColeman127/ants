@@ -3,13 +3,47 @@ var Vec2 = /** @class */ (function () {
         this.x = x;
         this.y = y;
     }
+    Object.defineProperty(Vec2.prototype, "norm", {
+        // computed properties
+        get: function () {
+            return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Vec2.prototype, "normalized", {
+        get: function () {
+            return this.scale(1 / this.norm);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Vec2.prototype, "angle", {
+        get: function () {
+            return Math.atan2(this.y, this.x);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Vec2.prototype, "angle2pi", {
+        get: function () {
+            var ang = this.angle;
+            return (ang >= 0 ? ang : 2 * Math.PI + ang);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Vec2.prototype, "is_zero", {
+        get: function () {
+            return (this.x === 0 && this.y === 0);
+        },
+        enumerable: false,
+        configurable: true
+    });
     // instance methods
     // unary operators
     Vec2.prototype.copy = function () {
         return new Vec2(this.x, this.y);
-    };
-    Vec2.prototype.is_zero = function () {
-        return (this.x === 0 && this.y === 0);
     };
     Vec2.prototype.apply = function (func) {
         return new Vec2(func(this.x), func(this.y));
@@ -20,21 +54,14 @@ var Vec2 = /** @class */ (function () {
     Vec2.prototype.scale = function (scalar) {
         return new Vec2(scalar * this.x, scalar * this.y);
     };
+    Vec2.prototype.scale_to = function (scalar) {
+        return this.scale(scalar / this.norm);
+    };
     Vec2.prototype.trunc = function () {
         return new Vec2(this.x << 0, this.y << 0);
     };
     Vec2.prototype.sqr_norm = function () {
         return Math.pow(this.x, 2) + Math.pow(this.y, 2);
-    };
-    Vec2.prototype.norm = function () {
-        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
-    };
-    Vec2.prototype.normalized = function () {
-        return this.scale(1 / this.norm());
-    };
-    Vec2.prototype.clamp_unit = function () {
-        var sqr_norm = Math.pow(this.x, 2) + Math.pow(this.y, 2);
-        return (sqr_norm <= 1) ? this : this.scale(1 / Math.sqrt(sqr_norm));
     };
     Vec2.prototype.clamp_norm = function (max) {
         if (max === void 0) { max = 1; }
@@ -44,12 +71,9 @@ var Vec2 = /** @class */ (function () {
     Vec2.prototype.orth = function () {
         return new Vec2(-this.y, this.x);
     };
-    Vec2.prototype.angle = function () {
-        return Math.atan2(this.y, this.x);
-    };
-    Vec2.prototype.angle2pi = function () {
-        var ang = this.angle();
-        return (ang >= 0 ? ang : 2 * Math.PI + ang);
+    Vec2.prototype.nudge = function (scalar) {
+        if (scalar === void 0) { scalar = 1; }
+        return this.plus(Vec2.random(scalar));
     };
     // binary operators
     Vec2.prototype.equals = function (v) {
@@ -60,10 +84,6 @@ var Vec2 = /** @class */ (function () {
     };
     Vec2.prototype.minus = function (v) {
         return new Vec2(this.x - v.x, this.y - v.y);
-    };
-    Vec2.prototype.nudge = function (scalar) {
-        if (scalar === void 0) { scalar = 1; }
-        return this.plus(Vec2.random(scalar));
     };
     Vec2.prototype.dot = function (v) {
         return (this.x * v.x) + (this.y * v.y);
