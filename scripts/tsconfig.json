@@ -1,15 +1,14 @@
 {
     "compilerOptions": {
         "target": "es5",
-        "module": "es6",
-        "outDir": "out",
+        "module": "none",
+        "outFile": "./out/bundle.js",
         "noImplicitAny": true,
         "alwaysStrict": true,
         "sourceMap": true,
-        "watch": true
+        "removeComments": true
     },
     "exclude": [
-        "node_modules",
-        "old.ts"
+        "node_modules"
     ]
 }

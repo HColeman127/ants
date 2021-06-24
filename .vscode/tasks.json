@@ -7,7 +7,10 @@
 			"problemMatcher": [
 				"$tsc"
 			],
-			"group": "build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"label": "tsc: build - scripts/tsconfig.json"
 		},
 		{
@@ -17,10 +20,7 @@
 			"problemMatcher": [
 				"$tsc-watch"
 			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"label": "tsc: watch - scripts/tsconfig.json"
 		}
 	]

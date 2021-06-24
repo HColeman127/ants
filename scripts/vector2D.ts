@@ -47,8 +47,8 @@ export default class Vec2 {
 
     
 
-    apply(func: (x: number) => number): Vec2 {
-        return new Vec2(func(this.x), func(this.y));
+    apply(fn: (x: number) => number): Vec2 {
+        return new Vec2(fn(this.x), fn(this.y));
     }
 
     negative(): Vec2 {
