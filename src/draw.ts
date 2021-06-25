@@ -1,8 +1,7 @@
 import Ant from './ant';
-import Map from './map';
+import Simulation from './simulation';
 import {Params} from './params';
-import {Material} from './types';
-import Utils from './utils';
+import {Material, Utils} from './utils';
 import Vec2 from './vector2D';
 
 export default class DrawHelper {
@@ -10,13 +9,13 @@ export default class DrawHelper {
     readonly ctx: CanvasRenderingContext2D;
     public img: ImageData;
 
-    public brush: Brush;
+    public brush: BrushData;
 
     constructor(element_id: string) {
         this.canvas = document.getElementById(element_id) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d');
         this.img = new ImageData(Params.MAP_WIDTH, Params.MAP_WIDTH);
-        this.brush = new Brush(30, Material.none);
+        this.brush = new BrushData(30, Material.none);
 
         this.init_canvas_settings();
         this.init_img_data();
@@ -42,23 +41,28 @@ export default class DrawHelper {
         });
     }
 
-    draw_markers(map: Map) {
+    draw_frame(sim: Simulation) {
+        this.draw_markers(sim);
+        this.draw_ants(sim.ants);
+    }
+
+    draw_markers(sim: Simulation) {
         const data = this.img.data;
         for (let i = 0; i < Params.MAP_AREA; i++) {
             const j = 4 * i;
     
-            if (map.structures[i] === Material.wall) {
+            if (sim.structures[i] === Material.wall) {
                 data[j]     = 100;
                 data[j + 1] = 100;
                 data[j + 2] = 100;
-            } else if (map.structures[i] === Material.food) {
+            } else if (sim.structures[i] === Material.food) {
                 data[j]     = 0;
                 data[j + 1] = 0;
                 data[j + 2] = 255;
             } else {
-                data[j]     = map.marker_A[i];
+                data[j]     = sim.marker_A[i];
                 data[j + 1] = 0;
-                data[j + 2] = map.marker_B[i];
+                data[j + 2] = sim.marker_B[i];
             }
         }
         
@@ -74,7 +78,7 @@ export default class DrawHelper {
     
         for (let i = 0; i < Params.COLONY_SIZE; i++) {
             const p = ants[i].pos;
-            const dp = ants[i].aim.with_norm(1.5);
+            const dp = ants[i].aim.scaled_to(1.5);
     
             this.ctx.moveTo(p.x - dp.x, p.y - dp.y);
             this.ctx.lineTo(p.x + dp.x, p.y + dp.y);
@@ -84,8 +88,6 @@ export default class DrawHelper {
     }
     
     draw_brush(pos: Vec2) {
-        if (this.brush.material === Material.none) return;
-        
         this.ctx.strokeStyle = '#999999';
         this.ctx.beginPath();
         this.ctx.arc(pos.x, pos.y, this.brush.radius, 0, 2*Math.PI);
@@ -96,7 +98,7 @@ export default class DrawHelper {
     }
 }
 
-export class Brush {
+export class BrushData {
     public radius: number;
     public material: Material;
 

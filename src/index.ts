@@ -1,6 +1,8 @@
-import Simulation from './map';
-import {Material, MouseData} from './types';
+import Simulation from './simulation';
+import {Material} from './utils';
 import DrawHelper from './draw';
+import Vec2 from './vector2D';
+
 
 
 let p1: HTMLElement;
@@ -8,11 +10,8 @@ let sim: Simulation;
 let dh: DrawHelper;
 let mouse: MouseData;
 
-
-// uhhh stuff?
 let avg_dt: number = 0;
 let iters_per_frame: number = 0;
-
 
 
 window.addEventListener('load', () => {
@@ -31,43 +30,61 @@ function add_button_listeners() {
     document.getElementById('button_pause').addEventListener('click', () => iters_per_frame = 0);
 }
 
-
-
 function step() {
     const t0 = performance.now();
 
-    handle_brush();
     for (let i = 0; i < iters_per_frame; i++) {
-        sim.decay_markers();
-        sim.update_ants();
+        sim.update();
     }
-    draw_frame();
+    dh.draw_frame(sim);
 
-    log_time(t0);
+    if (dh.brush.material !== Material.none) {
+        dh.draw_brush(mouse.pos);
+
+        if (mouse.is_left_down) {
+            sim.apply_brush(mouse.pos, dh.brush.radius, dh.brush.material);
+        } else if (mouse.is_right_down) {
+            sim.apply_brush(mouse.pos, dh.brush.radius, 0);
+        }
+    }
+
+    avg_dt = 0.95*avg_dt + 0.05*(performance.now() - t0);
+    p1.innerHTML = avg_dt.toFixed(2) + 'ms';
 
     window.requestAnimationFrame(step);
 }
 
-function log_time(t0: number) {
-    const dt = (performance.now() - t0);
+class MouseData {
+    private element: HTMLElement;
 
-    avg_dt = 0.95*avg_dt + 0.05*dt;
-    p1.innerHTML = avg_dt.toFixed(2) + 'ms';
-}
+    public pos: Vec2;
+    public is_left_down: boolean;
+    public is_right_down: boolean;
 
-function draw_frame() {
-    dh.draw_markers(sim);
-    dh.draw_ants(sim.ants);
-    dh.draw_brush(mouse.pos);
-}
+    constructor(element: HTMLElement) {
+        this.element = element;
 
-function handle_brush() {
-    if (dh.brush.material === Material.none) return;
+        this.pos = Vec2.ZEROS;
+        this.is_left_down = false;
+        this.is_right_down = false;
 
-    if (mouse.is_left_down) {
-        sim.apply_brush(mouse.pos, dh.brush.radius, dh.brush.material);
-        return;
+        this.add_listeners();
     }
+
+    private add_listeners() {
+        this.element.addEventListener('mousedown', (event: MouseEvent) => {
+            this.is_left_down ||= (event.button === 0);
+            this.is_right_down ||= (event.button === 2);
+        });
     
-    if (mouse.is_right_down) sim.apply_brush(mouse.pos, dh.brush.radius, 0);
+        window.addEventListener('mousemove', (event: MouseEvent) => {
+            const rect = this.element.getBoundingClientRect();
+            this.pos = new Vec2(event.clientX - rect.left, event.clientY - rect.top);
+        });
+    
+        window.addEventListener('mouseup', (event: MouseEvent) => {
+            this.is_left_down &&= !(event.button === 0);
+            this.is_right_down &&= !(event.button === 2);
+        });
+    }
 }

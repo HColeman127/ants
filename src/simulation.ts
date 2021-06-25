@@ -1,6 +1,6 @@
 import Vec2 from './vector2D';
 import {Params} from './params';
-import Utils from './utils';
+import {Utils} from './utils';
 import Ant from './ant';
 
 
@@ -13,7 +13,7 @@ export default class Simulation {
     constructor() {
         this.ants = [];
         for (let i = 0; i < Params.COLONY_SIZE; i++) {
-            this.ants.push(new Ant(new Vec2(25, 25), Vec2.rand_vec()));
+            this.ants.push(new Ant(new Vec2(25, 25), Vec2.rand()));
         }
 
         this.marker_A = new Uint8ClampedArray(Params.MAP_AREA);
@@ -22,7 +22,12 @@ export default class Simulation {
         this.structures = new Uint8Array(Params.MAP_AREA);
     }
 
-    decay_markers() {
+    public update() {
+        this.decay_markers();
+        this.update_ants();
+    }
+
+    private decay_markers() {
         for (let i = 0; i < Params.MAP_AREA; i++) {
             if ((this.marker_A[i] !== 0 || this.marker_B[i] !== 0) && Math.random() < 0.005) {
                 this.marker_A[i] = 0;
@@ -31,11 +36,9 @@ export default class Simulation {
         }
     }
     
-    update_ants() {
+    private update_ants() {
         for (let i = 0; i < Params.COLONY_SIZE; i++) {
             const ant = this.ants[i];
-
-
 
             ant.update_aim(ant.has_food ? this.marker_A : this.marker_B);
             ant.update_pos(this.structures);
@@ -44,8 +47,7 @@ export default class Simulation {
         }
     }
 
-
-    apply_brush(pos: Vec2, radius: number, value: number) {
+    public apply_brush(pos: Vec2, radius: number, value: number) {
         Utils.loop_clamped_circle(pos, radius, (x: number, y: number) => {
             const index = x + y * Params.MAP_WIDTH;
             this.structures[index] = value;

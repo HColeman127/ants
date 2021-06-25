@@ -59,7 +59,7 @@ export default class Vec2 {
         return new Vec2(scalar * this.x, scalar * this.y);
     }
 
-    with_norm(scalar: number): Vec2 {
+    scaled_to(scalar: number): Vec2 {
         return this.scaled(scalar / Math.sqrt(this.x**2 + this.y**2));
     }
 
@@ -118,7 +118,7 @@ export default class Vec2 {
 
     // static methods
 
-    static rand_vec(scalar: number = 1): Vec2 {
+    static rand(scalar: number = 1): Vec2 {
         return new Vec2(scalar * (2 * Math.random() - 1), scalar * (2 * Math.random() - 1));
     }
 

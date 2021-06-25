@@ -1,7 +1,13 @@
 import Vec2 from './vector2D';
 import {Params} from './params';
 
-export default class Utils {
+export const enum Material {
+    none = 0,
+    wall = 1,
+    food = 2
+}
+
+export class Utils {
     /* static get_mouse_pos(event: MouseEvent, element: HTMLElement): Vec2 {
         const rect = element.getBoundingClientRect();
         return new Vec2(event.clientX - rect.left, event.clientY - rect.top);
