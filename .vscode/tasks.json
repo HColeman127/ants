@@ -3,25 +3,39 @@
 	"tasks": [
 		{
 			"type": "typescript",
-			"tsconfig": "scripts/tsconfig.json",
+			"tsconfig": "tsconfig.json",
 			"problemMatcher": [
 				"$tsc"
 			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"label": "tsc: build - scripts/tsconfig.json"
+			"group": "build",
+			"label": "tsc: build - tsconfig.json"
 		},
 		{
 			"type": "typescript",
-			"tsconfig": "scripts/tsconfig.json",
+			"tsconfig": "tsconfig.json",
 			"option": "watch",
 			"problemMatcher": [
 				"$tsc-watch"
 			],
 			"group": "build",
-			"label": "tsc: watch - scripts/tsconfig.json"
+			"label": "tsc: watch - tsconfig.json"
+		},
+		{
+			"label": "webpack: development build ",
+			"type": "shell",
+			"command": "npx webpack --mode=development",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "webpack: production build ",
+			"type": "shell",
+			"command": "npx webpack --mode=production",
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }
